@@ -2,6 +2,7 @@
 {SlackTextMessage, SlackRawMessage, SlackBotMessage} = require './message'
 {SlackRawListener, SlackBotListener} = require './listener'
 
+request = require 'request'
 SlackClient = require 'slack-client'
 Util = require 'util'
 
@@ -223,61 +224,24 @@ class SlackBot extends Adapter
       return
 
     for msg in messages
-      continue if msg.length < SlackBot.MIN_MESSAGE_LENGTH
-
-      # Replace @username with <@UXXXXX> for mentioning users and channels
-      msg = msg.replace /(?:^| )@([\w]+)/gm, (match, p1) =>
-        user = @client.getUserByName p1
-        if user
-          match = match.replace /@[\w]+/, "<@#{user.id}>"
-        else if p1 in SlackBot.RESERVED_KEYWORDS
-          match = match.replace /@[\w]+/, "<!#{p1}>"
-        else
-          match = match
-
-      @robot.logger.debug "Sending to #{envelope.room}: #{msg}"
-
-      if msg.length <= SlackBot.MAX_MESSAGE_LENGTH
-        channel.send msg
-
-      # If message is greater than MAX_MESSAGE_LENGTH, split it into multiple messages
-      else
-        submessages = []
-
-        while msg.length > 0
-          if msg.length <= SlackBot.MAX_MESSAGE_LENGTH
-            submessages.push msg
-            msg = ''
-
-          else
-            # Split message at last line break, if it exists
-            maxSizeChunk = msg.substring(0, SlackBot.MAX_MESSAGE_LENGTH)
-
-            lastLineBreak = maxSizeChunk.lastIndexOf('\n')
-            lastWordBreak = maxSizeChunk.match(/\W\w+$/)?.index
-
-            breakIndex = if lastLineBreak > -1
-              lastLineBreak
-            else if lastWordBreak
-              lastWordBreak
-            else
-              SlackBot.MAX_MESSAGE_LENGTH
-
-            submessages.push msg.substring(0, breakIndex)
-
-            # Skip char if split on line or word break
-            breakIndex++ if breakIndex isnt SlackBot.MAX_MESSAGE_LENGTH
-
-            msg = msg.substring(breakIndex, msg.length)
-
-        channel.send m for m in submessages
+        request.post {
+                        url: 'https://slack.com/api/files.upload',
+                        qs: { token: @options.token },
+                        form: {
+                                content: msg,
+                                filetype: "post",
+                                channels: channel.id
+                              }
+                     },
+                     (err, resp, body) =>
+                       return @robot.logger.error err if err
+                       return @robot.logger.error resp if resp.statusCode >= 300
+                       parsed = JSON.parse(body);
+                       return @robot.logger.error parsed.error if !parsed.ok
 
   reply: (envelope, messages...) ->
-    @robot.logger.debug "Sending reply"
-
     for msg in messages
-      # TODO: Don't prefix username if replying in DM
-      @send envelope, "<@#{envelope.user.id}>: #{msg}"
+      @send envelope, msg
 
   topic: (envelope, strings...) ->
     channel = @client.getChannelGroupOrDMByName envelope.room

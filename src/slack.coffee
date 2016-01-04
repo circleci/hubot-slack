@@ -224,20 +224,14 @@ class SlackBot extends Adapter
       return
 
     for msg in messages
-        request.post {
-                        url: 'https://slack.com/api/files.upload',
-                        qs: { token: @options.token },
-                        form: {
-                                content: msg,
-                                filetype: "post",
-                                channels: channel.id
-                              }
-                     },
-                     (err, resp, body) =>
-                       return @robot.logger.error err if err
-                       return @robot.logger.error resp if resp.statusCode >= 300
-                       parsed = JSON.parse(body);
-                       return @robot.logger.error parsed.error if !parsed.ok
+        channel.postMessage
+          as_user: true,
+          icon_emoji: ":robot_face:",
+          attachments: [
+                         fallback: msg,
+                         text: msg,
+                         mrkdwn_in: ["text"]
+                       ]
 
   reply: (envelope, messages...) ->
     for msg in messages

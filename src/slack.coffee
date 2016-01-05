@@ -250,10 +250,10 @@ class SlackBot extends Adapter
                                }
                        },
                        (err, resp, body) =>
-                         return @robot.logger.error err if err
-                         return @robot.logger.error resp if resp.statusCode >= 300
+                         return @robot.logger.error "Request error: #{err}" if err
+                         return @robot.logger.error "HTTP error: #{body}" if resp.statusCode >= 300
                          parsed = JSON.parse(body);
-                         return @robot.logger.error parsed.error if !parsed.ok
+                         return @robot.logger.error "JSON error: #{parsed.error}" if !parsed.ok
 
   reply: (envelope, messages...) ->
     for msg in messages

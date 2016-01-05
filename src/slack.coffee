@@ -224,14 +224,36 @@ class SlackBot extends Adapter
       return
 
     for msg in messages
-        channel.postMessage
-          as_user: true,
-          icon_emoji: ":robot_face:",
-          attachments: [
-                         fallback: msg,
-                         text: msg,
-                         mrkdwn_in: ["text"]
-                       ]
+      switch process.env.HUBOT_SLACK_METHOD
+        when "attachment", undefined
+          channel.postMessage
+            as_user: true,
+            attachments: [
+                           fallback: msg,
+                           text: msg,
+                           mrkdwn_in: ["text"]
+                         ]
+        when "markdown", "text"
+          request.post {
+                         url: 'https://slack.com/api/files.upload',
+                         qs: { token: @options.token },
+                         form: {
+                                 content: msg,
+                                 filetype:
+                                   switch process.env.HUBOT_SLACK_METHOD
+                                     when "markdown" then "post"
+                                     when "text" then "text"
+                                 filename:
+                                    if process.env.HUBOT_SLACK_METHOD == "markdown"
+                                      "*"
+                                 channels: channel.id
+                               }
+                       },
+                       (err, resp, body) =>
+                         return @robot.logger.error err if err
+                         return @robot.logger.error resp if resp.statusCode >= 300
+                         parsed = JSON.parse(body);
+                         return @robot.logger.error parsed.error if !parsed.ok
 
   reply: (envelope, messages...) ->
     for msg in messages
